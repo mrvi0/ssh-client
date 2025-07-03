@@ -13,6 +13,7 @@ import logging
 from datetime import datetime, timedelta
 import os
 from pathlib import Path
+from functools import wraps
 
 # Add project root to path
 project_root = Path(__file__).parent
@@ -90,7 +91,8 @@ def verify_token(token):
 
 def require_auth(f):
     """Decorator to require authentication"""
-    def decorated_function(*args, **kwargs):
+    @wraps(f)
+    def auth_decorated_function(*args, **kwargs):
         token = request.headers.get('Authorization')
         if not token or not token.startswith('Bearer '):
             return jsonify({'error': 'Authentication required'}), 401
@@ -102,11 +104,12 @@ def require_auth(f):
             
         request.user = payload
         return f(*args, **kwargs)
-    return decorated_function
+    return auth_decorated_function
 
 def require_admin(f):
     """Decorator to require admin access"""
-    def decorated_function(*args, **kwargs):
+    @wraps(f)
+    def admin_decorated_function(*args, **kwargs):
         token = request.headers.get('Authorization')
         if not token or not token.startswith('Bearer '):
             return jsonify({'error': 'Authentication required'}), 401
@@ -121,7 +124,7 @@ def require_admin(f):
             
         request.user = payload
         return f(*args, **kwargs)
-    return decorated_function
+    return admin_decorated_function
 
 @app.route('/')
 def index():
