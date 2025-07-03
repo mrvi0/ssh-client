@@ -2,39 +2,35 @@ import sqlite3
 import os
 import json
 from datetime import datetime
-from cryptography.fernet import Fernet
-import base64
+from typing import Dict, Any, List, Optional
+import logging
 
-class Database:
-    def __init__(self, db_path="ssh_client.db"):
+# Import utilities
+from utils.encryption import EncryptionManager
+from utils.config import app_paths
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class DatabaseManager:
+    def __init__(self, db_path: Optional[str] = None):
+        if db_path is None:
+            db_path = str(app_paths.get_database_path())
         self.db_path = db_path
-        self.cipher = None
-        self.init_encryption()
+        self.encryption_manager = EncryptionManager(str(app_paths.get_key_path()))
         self.init_database()
     
-    def init_encryption(self):
-        """Инициализация шифрования"""
-        key_file = "encryption.key"
-        if os.path.exists(key_file):
-            with open(key_file, "rb") as f:
-                key = f.read()
-        else:
-            key = Fernet.generate_key()
-            with open(key_file, "wb") as f:
-                f.write(key)
-        
-        self.cipher = Fernet(key)
-    
-    def encrypt(self, data):
-        """Шифрование данных"""
+    def encrypt(self, data: str) -> Optional[str]:
+        """Encrypt data"""
         if data:
-            return self.cipher.encrypt(data.encode()).decode()
+            return self.encryption_manager.encrypt(data)
         return None
     
-    def decrypt(self, encrypted_data):
-        """Расшифровка данных"""
+    def decrypt(self, encrypted_data: str) -> Optional[str]:
+        """Decrypt data"""
         if encrypted_data:
-            return self.cipher.decrypt(encrypted_data.encode()).decode()
+            return self.encryption_manager.decrypt(encrypted_data)
         return None
     
     def init_database(self):
@@ -65,12 +61,12 @@ class Database:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS commands (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                connection_id INTEGER,
                 name TEXT NOT NULL,
                 command TEXT NOT NULL,
+                category TEXT,
                 description TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (connection_id) REFERENCES connections (id) ON DELETE CASCADE
+                arguments TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -89,33 +85,31 @@ class Database:
         conn.commit()
         conn.close()
     
-    def add_connection(self, name, host, port, username, password=None, 
-                      private_key=None, passphrase=None, group=None, tags=None, notes=None):
-        """Добавление нового подключения"""
+    def add_connection(self, name: str, host: str, port: int = 22, username: Optional[str] = None, 
+                      password: Optional[str] = None, key_path: Optional[str] = None, description: Optional[str] = None) -> int:
+        """Add a new connection"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         cursor.execute('''
             INSERT INTO connections (name, host, port, username, password_encrypted, 
-                                   private_key_encrypted, passphrase_encrypted, group_name, tags, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   private_key_encrypted, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
             name, host, port, username,
-            self.encrypt(password),
-            self.encrypt(private_key),
-            self.encrypt(passphrase),
-            group,
-            json.dumps(tags) if tags else None,
-            notes
+            self.encrypt(password) if password else None,
+            self.encrypt(key_path) if key_path else None,
+            description
         ))
         
         connection_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        return connection_id
+        logger.info(f"Added connection: {name}")
+        return connection_id if connection_id is not None else 0
     
-    def get_connections(self):
-        """Получение всех подключений"""
+    def get_all_connections(self) -> List[Dict[str, Any]]:
+        """Get all connections"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -130,19 +124,18 @@ class Database:
                 'host': row[2],
                 'port': row[3],
                 'username': row[4],
-                'has_password': bool(row[5]),
-                'has_private_key': bool(row[6]),
-                'group': row[8],
-                'tags': json.loads(row[9]) if row[9] else [],
-                'notes': row[10],
-                'created_at': row[11]
+                'password': self.decrypt(row[5]) if row[5] else None,
+                'key_path': self.decrypt(row[6]) if row[6] else None,
+                'description': row[7],
+                'created_at': row[8],
+                'updated_at': row[9]
             })
         
         conn.close()
         return connections
     
-    def get_connection(self, connection_id):
-        """Получение подключения по ID"""
+    def get_connection(self, connection_id: int) -> Optional[Dict[str, Any]]:
+        """Get connection by ID"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -156,12 +149,11 @@ class Database:
                 'host': row[2],
                 'port': row[3],
                 'username': row[4],
-                'password': self.decrypt(row[5]),
-                'private_key': self.decrypt(row[6]),
-                'passphrase': self.decrypt(row[7]),
-                'group': row[8],
-                'tags': json.loads(row[9]) if row[9] else [],
-                'notes': row[10]
+                'password': self.decrypt(row[5]) if row[5] else None,
+                'key_path': self.decrypt(row[6]) if row[6] else None,
+                'description': row[7],
+                'created_at': row[8],
+                'updated_at': row[9]
             }
         else:
             connection = None
@@ -169,12 +161,132 @@ class Database:
         conn.close()
         return connection
     
-    def update_connection(self, connection_id, **kwargs):
-        """Обновление подключения"""
+
+    
+    def add_command(self, name: str, command: str, category: Optional[str] = None, 
+                   description: Optional[str] = None, arguments: Optional[str] = None) -> int:
+        """Add a new command"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Подготавливаем данные для обновления
+        cursor.execute('''
+            INSERT INTO commands (name, command, category, description, arguments)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (name, command, category, description, arguments))
+        
+        command_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        logger.info(f"Added command: {name}")
+        return command_id if command_id is not None else 0
+    
+    def get_all_commands(self) -> List[Dict[str, Any]]:
+        """Get all commands"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM commands ORDER BY name')
+        rows = cursor.fetchall()
+        
+        commands = []
+        for row in rows:
+            commands.append({
+                'id': row[0],
+                'name': row[1],
+                'command': row[2],
+                'category': row[3],
+                'description': row[4],
+                'arguments': row[5],
+                'created_at': row[6]
+            })
+        
+        conn.close()
+        return commands
+    
+    def get_command(self, command_id: int) -> Optional[Dict[str, Any]]:
+        """Get command by ID"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM commands WHERE id = ?', (command_id,))
+        row = cursor.fetchone()
+        
+        if row:
+            command = {
+                'id': row[0],
+                'name': row[1],
+                'command': row[2],
+                'category': row[3],
+                'description': row[4],
+                'arguments': row[5],
+                'created_at': row[6]
+            }
+        else:
+            command = None
+        
+        conn.close()
+        return command
+    
+    def update_command(self, command_id: int, **kwargs) -> bool:
+        """Update command"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Prepare update fields
+        update_fields = []
+        values = []
+        
+        if 'name' in kwargs:
+            update_fields.append('name = ?')
+            values.append(kwargs['name'])
+        
+        if 'command' in kwargs:
+            update_fields.append('command = ?')
+            values.append(kwargs['command'])
+        
+        if 'category' in kwargs:
+            update_fields.append('category = ?')
+            values.append(kwargs['category'])
+        
+        if 'description' in kwargs:
+            update_fields.append('description = ?')
+            values.append(kwargs['description'])
+        
+        if 'arguments' in kwargs:
+            update_fields.append('arguments = ?')
+            values.append(kwargs['arguments'])
+        
+        values.append(command_id)
+        
+        if update_fields:
+            query = f"UPDATE commands SET {', '.join(update_fields)} WHERE id = ?"
+            cursor.execute(query, values)
+            conn.commit()
+            success = True
+        else:
+            success = False
+        
+        conn.close()
+        return success
+    
+    def delete_command(self, command_id: int) -> bool:
+        """Delete command"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM commands WHERE id = ?', (command_id,))
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Deleted command ID: {command_id}")
+        return True
+    
+    def update_connection(self, connection_id: int, **kwargs) -> bool:
+        """Update connection"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Prepare update fields
         update_fields = []
         values = []
         
@@ -196,27 +308,15 @@ class Database:
         
         if 'password' in kwargs:
             update_fields.append('password_encrypted = ?')
-            values.append(self.encrypt(kwargs['password']))
+            values.append(self.encrypt(kwargs['password']) if kwargs['password'] else None)
         
-        if 'private_key' in kwargs:
+        if 'key_path' in kwargs:
             update_fields.append('private_key_encrypted = ?')
-            values.append(self.encrypt(kwargs['private_key']))
+            values.append(self.encrypt(kwargs['key_path']) if kwargs['key_path'] else None)
         
-        if 'passphrase' in kwargs:
-            update_fields.append('passphrase_encrypted = ?')
-            values.append(self.encrypt(kwargs['passphrase']))
-        
-        if 'group' in kwargs:
-            update_fields.append('group_name = ?')
-            values.append(kwargs['group'])
-        
-        if 'tags' in kwargs:
-            update_fields.append('tags = ?')
-            values.append(json.dumps(kwargs['tags']))
-        
-        if 'notes' in kwargs:
+        if 'description' in kwargs:
             update_fields.append('notes = ?')
-            values.append(kwargs['notes'])
+            values.append(kwargs['description'])
         
         update_fields.append('updated_at = CURRENT_TIMESTAMP')
         values.append(connection_id)
@@ -225,64 +325,26 @@ class Database:
             query = f"UPDATE connections SET {', '.join(update_fields)} WHERE id = ?"
             cursor.execute(query, values)
             conn.commit()
+            success = True
+        else:
+            success = False
         
         conn.close()
+        return success
     
-    def delete_connection(self, connection_id):
-        """Удаление подключения"""
+    def delete_connection(self, connection_id: int) -> bool:
+        """Delete connection"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         cursor.execute('DELETE FROM connections WHERE id = ?', (connection_id,))
         conn.commit()
         conn.close()
+        
+        logger.info(f"Deleted connection ID: {connection_id}")
+        return True
     
-    def add_command(self, connection_id, name, command, description=None):
-        """Добавление команды"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO commands (connection_id, name, command, description)
-            VALUES (?, ?, ?, ?)
-        ''', (connection_id, name, command, description))
-        
-        command_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-        return command_id
-    
-    def get_commands(self, connection_id=None):
-        """Получение команд"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if connection_id:
-            cursor.execute('SELECT * FROM commands WHERE connection_id = ? ORDER BY name', (connection_id,))
-        else:
-            cursor.execute('SELECT * FROM commands ORDER BY name')
-        
-        rows = cursor.fetchall()
-        
-        commands = []
-        for row in rows:
-            commands.append({
-                'id': row[0],
-                'connection_id': row[1],
-                'name': row[2],
-                'command': row[3],
-                'description': row[4],
-                'created_at': row[5]
-            })
-        
-        conn.close()
-        return commands
-    
-    def delete_command(self, command_id):
-        """Удаление команды"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('DELETE FROM commands WHERE id = ?', (command_id,))
-        conn.commit()
-        conn.close() 
+    def close(self):
+        """Close database connection"""
+        # SQLite connections are closed automatically, but we can add cleanup here
+        logger.info("Database manager closed") 
