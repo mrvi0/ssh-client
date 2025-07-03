@@ -79,3 +79,11 @@ temp/
 # Ignore folder with interface examples
 ignore/ 
 node_modules/
+
+# Sensitive data and keys
+*.env
+encryption.key
+instance/
+*.db
+*.sqlite
+*.sqlite3

@@ -1,8 +1,10 @@
 # Web Server Dependencies
 Flask==2.3.3
+Flask-SocketIO==5.3.6
 Flask-CORS==4.0.0
 Flask-SQLAlchemy==3.1.1
-bcrypt==4.1.2
+bcrypt==4.0.1
 PyJWT==2.8.0
 python-dotenv==1.0.0
-requests==2.31.0 
+requests==2.31.0
+python-socketio==5.8.0 
