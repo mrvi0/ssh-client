@@ -37,7 +37,7 @@ class TerminalFrame(ttk.Frame):
             fg="white",
             insertbackground="white",
             selectbackground="blue",
-            cursor="ibeam"
+            cursor="xterm"
         )
         
         # Scrollbars
