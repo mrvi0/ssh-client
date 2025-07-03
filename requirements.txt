@@ -27,7 +27,5 @@ click==8.1.7
 Werkzeug==2.3.7
 
 # Desktop App Dependencies
-sqlite3
-tkinter
 pillow==10.0.1
 requests==2.31.0 

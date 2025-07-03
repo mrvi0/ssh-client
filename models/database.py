@@ -82,6 +82,19 @@ class DatabaseManager:
             )
         ''')
         
+        # Таблица групп
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                members TEXT,  -- JSON array of member emails
+                connections TEXT,  -- JSON array of connection IDs
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         conn.commit()
         conn.close()
     
@@ -160,8 +173,6 @@ class DatabaseManager:
         
         conn.close()
         return connection
-    
-
     
     def add_command(self, name: str, command: str, category: Optional[str] = None, 
                    description: Optional[str] = None, arguments: Optional[str] = None) -> int:
@@ -343,6 +354,182 @@ class DatabaseManager:
         
         logger.info(f"Deleted connection ID: {connection_id}")
         return True
+    
+    def add_group(self, group_data: Dict[str, Any]) -> int:
+        """Add a new group"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Convert lists to JSON strings
+        members_json = json.dumps(group_data.get('members', []))
+        connections_json = json.dumps(group_data.get('connections', []))
+        
+        cursor.execute('''
+            INSERT INTO groups (name, description, members, connections)
+            VALUES (?, ?, ?, ?)
+        ''', (
+            group_data['name'],
+            group_data.get('description', ''),
+            members_json,
+            connections_json
+        ))
+        
+        conn.commit()
+        group_id = cursor.lastrowid
+        logger.info(f"Added group: {group_data['name']}")
+        return group_id
+    
+    def get_group(self, group_id: int) -> Optional[Dict[str, Any]]:
+        """Get a group by ID"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM groups WHERE id = ?', (group_id,))
+        row = cursor.fetchone()
+        
+        if row:
+            group = {
+                'id': row[0],
+                'name': row[1],
+                'description': row[2],
+                'members': json.loads(row[3]) if row[3] else [],
+                'connections': json.loads(row[4]) if row[4] else [],
+                'created_at': row[5],
+                'updated_at': row[6]
+            }
+        else:
+            group = None
+        
+        conn.close()
+        return group
+    
+    def get_all_groups(self) -> List[Dict[str, Any]]:
+        """Get all groups"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM groups ORDER BY name')
+        rows = cursor.fetchall()
+        
+        groups = []
+        for row in rows:
+            groups.append({
+                'id': row[0],
+                'name': row[1],
+                'description': row[2],
+                'members': json.loads(row[3]) if row[3] else [],
+                'connections': json.loads(row[4]) if row[4] else [],
+                'created_at': row[5],
+                'updated_at': row[6]
+            })
+        
+        conn.close()
+        return groups
+    
+    def update_group(self, group_id: int, group_data: Dict[str, Any]):
+        """Update a group"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Convert lists to JSON strings
+        members_json = json.dumps(group_data.get('members', []))
+        connections_json = json.dumps(group_data.get('connections', []))
+        
+        cursor.execute('''
+            UPDATE groups 
+            SET name = ?, description = ?, members = ?, connections = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (
+            group_data['name'],
+            group_data.get('description', ''),
+            members_json,
+            connections_json,
+            group_id
+        ))
+        
+        conn.commit()
+        logger.info(f"Updated group: {group_data['name']}")
+        
+        conn.close()
+    
+    def delete_group(self, group_id: int):
+        """Delete a group"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM groups WHERE id = ?', (group_id,))
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Deleted group: {group_id}")
+    
+    def add_user(self, user_data: Dict[str, Any]) -> int:
+        """Add a new user (for web app)"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO users (username, email, password_hash, is_admin)
+            VALUES (?, ?, ?, ?)
+        ''', (
+            user_data['username'],
+            user_data['email'],
+            user_data['password_hash'],
+            user_data.get('is_admin', False)
+        ))
+        
+        conn.commit()
+        user_id = cursor.lastrowid
+        logger.info(f"Added user: {user_data['username']}")
+        return user_id
+    
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """Get a user by username"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+        row = cursor.fetchone()
+        
+        if row:
+            user = {
+                'id': row[0],
+                'username': row[1],
+                'email': row[2],
+                'password_hash': row[3],
+                'is_admin': bool(row[4]),
+                'created_at': row[5],
+                'updated_at': row[6]
+            }
+        else:
+            user = None
+        
+        conn.close()
+        return user
+    
+    def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """Get a user by email"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM users WHERE email = ?', (email,))
+        row = cursor.fetchone()
+        
+        if row:
+            user = {
+                'id': row[0],
+                'username': row[1],
+                'email': row[2],
+                'password_hash': row[3],
+                'is_admin': bool(row[4]),
+                'created_at': row[5],
+                'updated_at': row[6]
+            }
+        else:
+            user = None
+        
+        conn.close()
+        return user
     
     def close(self):
         """Close database connection"""

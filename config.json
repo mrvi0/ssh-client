@@ -1,0 +1,27 @@
+{
+  "app": {
+    "name": "SSH Client",
+    "version": "1.0.0",
+    "theme": "default",
+    "language": "en"
+  },
+  "database": {
+    "path": "ssh_client.db",
+    "encryption_enabled": true
+  },
+  "ssh": {
+    "default_port": 22,
+    "timeout": 30,
+    "keepalive_interval": 60
+  },
+  "ui": {
+    "window_width": 1200,
+    "window_height": 800,
+    "font_size": 10,
+    "font_family": "Consolas"
+  },
+  "security": {
+    "auto_lock_timeout": 300,
+    "require_password_on_startup": false
+  }
+}

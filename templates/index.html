@@ -1,253 +1,294 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SSH Client - Self-hosted</title>
+    <title>SSH Client - Professional Terminal</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="logo">🔐 SSH Client</div>
-            
-            <div class="nav-item active" data-page="dashboard">
-                <span>📊</span>
-                Dashboard
-            </div>
-            
-            <div class="nav-item" data-page="connections">
-                <span>🔗</span>
-                Connections
-            </div>
-            
-            <div class="nav-item" data-page="settings">
-                <span>⚙️</span>
-                Settings
-            </div>
-            
-            <hr>
-            
-            <h3>Recent Connections</h3>
-            <div id="recent-connections">
-                <!-- Recent connections will be loaded here -->
-            </div>
-        </div>
-
-        <!-- Main Content -->
-        <div class="main-content">
-            <div class="header">
-                <h1 id="page-title">Dashboard</h1>
-                <div class="header-actions">
-                    <button class="btn" id="copy-btn">📋 Copy</button>
-                    <button class="btn" id="save-btn">💾 Save</button>
-                    <button class="btn btn-primary" id="new-connection-btn">➕ New Connection</button>
+    <div id="app">
+        <!-- Login/Register Modal -->
+        <div id="authModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="authTitle">Login</h2>
+                    <span class="close" onclick="closeAuthModal()">&times;</span>
                 </div>
-            </div>
-
-            <!-- Dashboard Page -->
-            <div id="dashboard-page" class="page active">
-                <div class="dashboard-grid">
-                    <div class="card">
-                        <h3>Quick Stats</h3>
-                        <div class="stats">
-                            <div class="stat">
-                                <span class="stat-number" id="total-connections">0</span>
-                                <span class="stat-label">Total Connections</span>
-                            </div>
-                            <div class="stat">
-                                <span class="stat-number" id="active-connections">0</span>
-                                <span class="stat-label">Active Sessions</span>
-                            </div>
-                        </div>
+                
+                <!-- Login Form -->
+                <form id="loginForm" class="auth-form">
+                    <div class="form-group">
+                        <label for="loginUsername">Username</label>
+                        <input type="text" id="loginUsername" required>
                     </div>
-                    
-                    <div class="card">
-                        <h3>Recent Activity</h3>
-                        <div id="recent-activity">
-                            <p>No recent activity</p>
-                        </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" required>
                     </div>
-                </div>
-            </div>
-
-            <!-- Connections Page -->
-            <div id="connections-page" class="page">
-                <div class="connections-header">
-                    <h2>SSH Connections</h2>
-                    <button class="btn btn-primary" id="add-connection-btn">Add Connection</button>
-                </div>
-                
-                <div class="connections-grid" id="connections-grid">
-                    <!-- Connections will be loaded here -->
-                </div>
-            </div>
-
-            <!-- Terminal Page -->
-            <div id="terminal-page" class="page">
-                <div class="terminal-container">
-                    <div class="terminal-header">
-                        <span id="terminal-title">Terminal Session</span>
-                        <div class="terminal-controls">
-                            <button class="btn btn-small" id="clear-terminal">Clear</button>
-                            <button class="btn btn-small" id="disconnect-btn">Disconnect</button>
-                        </div>
-                    </div>
-                    
-                    <div class="terminal" id="terminal">
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">Welcome to SSH Client</span>
-                        </div>
-                        <div class="terminal-line">
-                            <span class="terminal-prompt">Select a connection to start</span>
-                        </div>
-                    </div>
-                    
-                    <div class="terminal-input-container">
-                        <input type="text" class="terminal-input" id="command-input" placeholder="Enter command...">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Settings Page -->
-            <div id="settings-page" class="page">
-                <div class="settings-container">
-                    <h2>Settings</h2>
-                    
-                    <div class="setting-group">
-                        <h3>Authentication</h3>
-                        <div class="setting-item">
-                            <label>Master Password</label>
-                            <input type="password" id="master-password" placeholder="Set master password">
-                        </div>
-                    </div>
-                    
-                    <div class="setting-group">
-                        <h3>Security</h3>
-                        <div class="setting-item">
-                            <label>Auto-lock timeout (minutes)</label>
-                            <input type="number" id="auto-lock-timeout" value="30" min="1" max="1440">
-                        </div>
-                    </div>
-                    
-                    <div class="setting-group">
-                        <h3>Appearance</h3>
-                        <div class="setting-item">
-                            <label>Theme</label>
-                            <select id="theme-select">
-                                <option value="dark">Dark</option>
-                                <option value="light">Light</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Connection Modal -->
-    <div id="connection-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-title">New Connection</h2>
-                <button class="modal-close" id="modal-close">&times;</button>
-            </div>
-            
-            <form id="connection-form">
-                <div class="form-group">
-                    <label>Connection Name</label>
-                    <input type="text" id="conn-name" required placeholder="My Server">
-                </div>
-                
-                <div class="form-group">
-                    <label>Host</label>
-                    <input type="text" id="conn-host" required placeholder="192.168.1.100">
-                </div>
-                
-                <div class="form-group">
-                    <label>Port</label>
-                    <input type="number" id="conn-port" value="22" min="1" max="65535">
-                </div>
-                
-                <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" id="conn-username" required placeholder="root">
-                </div>
-                
-                <div class="form-group">
-                    <label>Authentication Method</label>
-                    <select id="auth-method">
-                        <option value="password">Password</option>
-                        <option value="key">Private Key</option>
-                    </select>
-                </div>
-                
-                <div class="form-group" id="password-group">
-                    <label>Password</label>
-                    <input type="password" id="conn-password" placeholder="Enter password">
-                </div>
-                
-                <div class="form-group" id="key-group" style="display: none;">
-                    <label>Private Key</label>
-                    <textarea id="conn-private-key" placeholder="Paste your private key here"></textarea>
-                </div>
-                
-                <div class="form-group" id="passphrase-group" style="display: none;">
-                    <label>Passphrase</label>
-                    <input type="password" id="conn-passphrase" placeholder="Enter passphrase">
-                </div>
-                
-                <div class="form-group">
-                    <label>Group</label>
-                    <input type="text" id="conn-group" placeholder="Production">
-                </div>
-                
-                <div class="form-group">
-                    <label>Tags</label>
-                    <input type="text" id="conn-tags" placeholder="web,production,ubuntu">
-                </div>
-                
-                <div class="form-group">
-                    <label>Notes</label>
-                    <textarea id="conn-notes" placeholder="Additional notes"></textarea>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn" id="cancel-btn">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Save Connection</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Login Modal -->
-    <div id="login-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Login</h2>
-            </div>
-            
-            <form id="login-form">
-                <div class="form-group">
-                    <label>Username</label>
-                    <input type="text" id="login-username" required>
-                </div>
-                
-                <div class="form-group">
-                    <label>Password</label>
-                    <input type="password" id="login-password" required>
-                </div>
-                
-                <div class="form-actions">
-                    <button type="button" class="btn" id="register-btn">Register</button>
                     <button type="submit" class="btn btn-primary">Login</button>
+                </form>
+                
+                <!-- Register Form -->
+                <form id="registerForm" class="auth-form" style="display: none;">
+                    <div class="form-group">
+                        <label for="registerUsername">Username</label>
+                        <input type="text" id="registerUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerEmail">Email</label>
+                        <input type="email" id="registerEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">Password</label>
+                        <input type="password" id="registerPassword" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Register</button>
+                </form>
+                
+                <div class="auth-switch">
+                    <span id="switchText">Don't have an account?</span>
+                    <a href="#" id="switchLink" onclick="switchAuthForm()">Register</a>
                 </div>
-            </form>
+            </div>
+        </div>
+
+        <!-- Main Application -->
+        <div id="mainApp" style="display: none;">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-left">
+                    <h1><i class="fas fa-terminal"></i> SSH Client</h1>
+                </div>
+                <div class="header-center">
+                    <div class="status-indicator">
+                        <span id="connectionStatus" class="status-offline">Offline</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <div class="user-info">
+                        <span id="userDisplay"></span>
+                        <button onclick="logout()" class="btn btn-small">Logout</button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- Sidebar -->
+                <aside class="sidebar">
+                    <nav class="nav-tabs">
+                        <button class="nav-tab active" onclick="showTab('connections')">
+                            <i class="fas fa-server"></i> Connections
+                        </button>
+                        <button class="nav-tab" onclick="showTab('snippets')">
+                            <i class="fas fa-code"></i> Snippets
+                        </button>
+                        <button class="nav-tab" onclick="showTab('groups')">
+                            <i class="fas fa-users"></i> Groups
+                        </button>
+                        <button id="adminTab" class="nav-tab" onclick="showTab('admin')" style="display: none;">
+                            <i class="fas fa-shield-alt"></i> Admin
+                        </button>
+                    </nav>
+
+                    <!-- Connections Tab -->
+                    <div id="connectionsTab" class="tab-content active">
+                        <div class="tab-header">
+                            <h3>SSH Connections</h3>
+                            <button onclick="showAddConnectionModal()" class="btn btn-small">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        </div>
+                        <div id="connectionsList" class="list-container">
+                            <!-- Connections will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Snippets Tab -->
+                    <div id="snippetsTab" class="tab-content">
+                        <div class="tab-header">
+                            <h3>Command Snippets</h3>
+                            <button onclick="showAddSnippetModal()" class="btn btn-small">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        </div>
+                        <div id="snippetsList" class="list-container">
+                            <!-- Snippets will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Groups Tab -->
+                    <div id="groupsTab" class="tab-content">
+                        <div class="tab-header">
+                            <h3>User Groups</h3>
+                            <button id="addGroupBtn" onclick="showAddGroupModal()" class="btn btn-small" style="display: none;">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        </div>
+                        <div id="groupsList" class="list-container">
+                            <!-- Groups will be loaded here -->
+                        </div>
+                    </div>
+
+                    <!-- Admin Tab -->
+                    <div id="adminTab" class="tab-content">
+                        <div class="tab-header">
+                            <h3>Admin Panel</h3>
+                        </div>
+                        <div class="admin-stats">
+                            <div class="stat-card">
+                                <h4>Connections</h4>
+                                <span id="connectionsCount">0</span>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Snippets</h4>
+                                <span id="snippetsCount">0</span>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Groups</h4>
+                                <span id="groupsCount">0</span>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Users</h4>
+                                <span id="usersCount">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- Terminal Area -->
+                <main class="terminal-area">
+                    <div class="terminal-header">
+                        <h3>Terminal</h3>
+                        <div class="terminal-controls">
+                            <button onclick="clearTerminal()" class="btn btn-small">
+                                <i class="fas fa-trash"></i> Clear
+                            </button>
+                            <button onclick="saveTerminal()" class="btn btn-small">
+                                <i class="fas fa-save"></i> Save
+                            </button>
+                        </div>
+                    </div>
+                    <div id="terminal" class="terminal">
+                        <div id="terminalOutput" class="terminal-output">
+                            <div class="terminal-line">
+                                <span class="prompt">$</span>
+                                <span class="command">Welcome to SSH Client</span>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+
+        <!-- Add Connection Modal -->
+        <div id="connectionModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Add Connection</h2>
+                    <span class="close" onclick="closeConnectionModal()">&times;</span>
+                </div>
+                <form id="connectionForm">
+                    <div class="form-group">
+                        <label for="connName">Name</label>
+                        <input type="text" id="connName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="connHost">Host</label>
+                        <input type="text" id="connHost" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="connPort">Port</label>
+                        <input type="number" id="connPort" value="22" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="connUsername">Username</label>
+                        <input type="text" id="connUsername" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="connPassword">Password</label>
+                        <input type="password" id="connPassword">
+                    </div>
+                    <div class="form-group">
+                        <label for="connKeyPath">Private Key Path</label>
+                        <input type="text" id="connKeyPath">
+                    </div>
+                    <div class="form-group">
+                        <label for="connDescription">Description</label>
+                        <textarea id="connDescription"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save</button>
+                        <button type="button" onclick="closeConnectionModal()" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add Snippet Modal -->
+        <div id="snippetModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Add Snippet</h2>
+                    <span class="close" onclick="closeSnippetModal()">&times;</span>
+                </div>
+                <form id="snippetForm">
+                    <div class="form-group">
+                        <label for="snippetName">Name</label>
+                        <input type="text" id="snippetName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="snippetCategory">Category</label>
+                        <input type="text" id="snippetCategory" value="General">
+                    </div>
+                    <div class="form-group">
+                        <label for="snippetCommand">Command</label>
+                        <textarea id="snippetCommand" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="snippetDescription">Description</label>
+                        <textarea id="snippetDescription"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save</button>
+                        <button type="button" onclick="closeSnippetModal()" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add Group Modal -->
+        <div id="groupModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Add Group</h2>
+                    <span class="close" onclick="closeGroupModal()">&times;</span>
+                </div>
+                <form id="groupForm">
+                    <div class="form-group">
+                        <label for="groupName">Name</label>
+                        <input type="text" id="groupName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="groupDescription">Description</label>
+                        <textarea id="groupDescription"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="groupMembers">Members (one per line)</label>
+                        <textarea id="groupMembers"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Save</button>
+                        <button type="button" onclick="closeGroupModal()" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html> 

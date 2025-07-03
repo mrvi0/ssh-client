@@ -1,55 +1,52 @@
 #!/usr/bin/env python3
 """
-SSH Client Desktop Application
-
-A simple SSH client with local data storage and command management.
+SSH Client - Professional Terminal Application
+Main entry point for the desktop application
 """
 
 import sys
 import os
-import signal
+import logging
 from pathlib import Path
 
-# Add project root to Python path
+# Add the project root to Python path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from gui.main_window import MainWindow
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('ssh_client.log')
+    ]
+)
 
-
-def signal_handler(signum, frame):
-    """Handle system signals for graceful shutdown"""
-    print("\nShutting down SSH Client...")
-    sys.exit(0)
-
+logger = logging.getLogger(__name__)
 
 def main():
     """Main application entry point"""
-    # Register signal handlers
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
     try:
-        # Create and run main window
+        logger.info("Starting SSH Client...")
+        
+        # Import here to avoid circular imports
+        from gui.main_window import MainWindow
+        
+        # Create and run the main window
         app = MainWindow()
         
-        # Set up cleanup on exit
-        def cleanup():
-            app.cleanup()
-            
-        app.root.protocol("WM_DELETE_WINDOW", lambda: [cleanup(), app.root.quit()])
+        # Set up closing handler
+        app.protocol("WM_DELETE_WINDOW", app.on_closing)
         
-        print("Starting SSH Client...")
-        app.run()
+        # Start the application
+        app.mainloop()
         
-    except KeyboardInterrupt:
-        print("\nApplication interrupted by user")
     except Exception as e:
-        print(f"Error starting application: {e}")
+        logger.error(f"Application failed to start: {e}")
         sys.exit(1)
     finally:
-        print("SSH Client stopped")
-
+        logger.info("SSH Client stopped")
 
 if __name__ == "__main__":
     main() 

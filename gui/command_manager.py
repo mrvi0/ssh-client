@@ -1,196 +1,117 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from typing import Dict, Any, Callable
+from typing import Dict, Any, Callable, Optional
+from models.database import DatabaseManager
 
 
-class CommandManagerFrame(ttk.Frame):
-    def __init__(self, parent, db_manager):
+class CommandManager(ttk.Frame):
+    def __init__(self, parent, on_snippet_select: Callable):
         super().__init__(parent)
-        self.db_manager = db_manager
+        self.on_snippet_select = on_snippet_select
+        self.db_manager = DatabaseManager()
         self.setup_ui()
-        self.refresh_commands()
+        self.load_commands()
         
     def setup_ui(self):
-        """Setup the command manager interface"""
-        # Left panel - command list
-        left_panel = ttk.Frame(self)
-        left_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
-        
-        # Command list header
-        list_header = ttk.Frame(left_panel)
-        list_header.pack(fill=tk.X, pady=(0, 5))
-        
-        ttk.Label(list_header, text="Commands", font=("Arial", 12, "bold")).pack(side=tk.LEFT)
-        
-        # Buttons frame
-        buttons_frame = ttk.Frame(list_header)
-        buttons_frame.pack(side=tk.RIGHT)
-        
-        ttk.Button(buttons_frame, text="Add", command=self.add_command).pack(side=tk.LEFT, padx=2)
-        ttk.Button(buttons_frame, text="Edit", command=self.edit_command).pack(side=tk.LEFT, padx=2)
-        ttk.Button(buttons_frame, text="Delete", command=self.delete_command).pack(side=tk.LEFT, padx=2)
-        
-        # Command list
-        list_frame = ttk.Frame(left_panel)
-        list_frame.pack(fill=tk.BOTH, expand=True)
+        """Setup the command manager UI"""
+        # Commands list
+        list_frame = ttk.LabelFrame(self, text="Command Snippets", padding=5)
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
         
         # Treeview for commands
-        columns = ("Name", "Command", "Category")
-        self.command_tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
+        columns = ("Category", "Description")
+        self.commands_tree = ttk.Treeview(list_frame, columns=columns, show="tree headings", height=10)
         
         # Configure columns
+        self.commands_tree.heading("#0", text="Name")
+        self.commands_tree.column("#0", width=150)
         for col in columns:
-            self.command_tree.heading(col, text=col)
-            self.command_tree.column(col, width=150)
+            self.commands_tree.heading(col, text=col)
+            self.commands_tree.column(col, width=120)
             
-        # Scrollbar for treeview
-        tree_scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.command_tree.yview)
-        self.command_tree.configure(yscrollcommand=tree_scrollbar.set)
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.commands_tree.yview)
+        self.commands_tree.configure(yscrollcommand=scrollbar.set)
         
-        self.command_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.commands_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
         # Bind double-click event
-        self.command_tree.bind("<Double-1>", self.on_command_double_click)
+        self.commands_tree.bind("<Double-1>", self.on_command_double_click)
         
-        # Right panel - command details
-        right_panel = ttk.Frame(self)
-        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        # Buttons
+        button_frame = ttk.Frame(self)
+        button_frame.pack(fill=tk.X, pady=(5, 0))
         
-        # Details header
-        ttk.Label(right_panel, text="Command Details", font=("Arial", 12, "bold")).pack(anchor=tk.W, pady=(0, 10))
+        ttk.Button(button_frame, text="Add", command=self.add_command).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="Edit", command=self.edit_command).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(button_frame, text="Delete", command=self.delete_command).pack(side=tk.LEFT)
         
-        # Details frame
-        details_frame = ttk.LabelFrame(right_panel, text="Details", padding=10)
-        details_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Command details labels
-        self.detail_labels = {}
-        detail_fields = [
-            ("Name", "name"),
-            ("Command", "command"),
-            ("Category", "category"),
-            ("Description", "description"),
-            ("Arguments", "arguments")
-        ]
-        
-        for i, (label_text, field_name) in enumerate(detail_fields):
-            ttk.Label(details_frame, text=f"{label_text}:").grid(row=i, column=0, sticky=tk.W, pady=2)
-            label = ttk.Label(details_frame, text="", foreground="gray", wraplength=300)
-            label.grid(row=i, column=1, sticky=tk.W, pady=2, padx=(10, 0))
-            self.detail_labels[field_name] = label
-            
-        # Execute button
-        execute_frame = ttk.Frame(right_panel)
-        execute_frame.pack(fill=tk.X, pady=(10, 0))
-        
-        ttk.Button(execute_frame, text="Execute Command", command=self.execute_command).pack(side=tk.LEFT)
-        
-    def refresh_commands(self):
-        """Refresh the command list"""
+    def load_commands(self):
+        """Load commands from database"""
         # Clear existing items
-        for item in self.command_tree.get_children():
-            self.command_tree.delete(item)
+        for item in self.commands_tree.get_children():
+            self.commands_tree.delete(item)
             
-        # Get commands from database
-        try:
-            commands = self.db_manager.get_all_commands()
-            for cmd in commands:
-                self.command_tree.insert("", tk.END, values=(
-                    cmd.get('name', ''),
-                    cmd.get('command', ''),
-                    cmd.get('category', '')
-                ), tags=(cmd.get('id'),))
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load commands: {str(e)}")
+        # Load commands
+        commands = self.db_manager.get_all_commands()
+        for cmd in commands:
+            self.commands_tree.insert("", "end", cmd['id'], text=cmd['name'], 
+                                    values=(cmd.get('category', 'General'), 
+                                           cmd.get('description', '')))
+                                           
+    def add_command(self):
+        """Add a new command snippet"""
+        dialog = CommandDialog(self, "Add Command Snippet")
+        if dialog.result:
+            command_data = dialog.result
+            # Save to database
+            self.db_manager.add_command(command_data)
+            self.load_commands()
+            
+    def edit_command(self):
+        """Edit selected command"""
+        selection = self.commands_tree.selection()
+        if not selection:
+            messagebox.showwarning("No Selection", "Please select a command to edit.")
+            return
+            
+        command_id = selection[0]
+        command_data = self.db_manager.get_command(command_id)
+        if command_data:
+            dialog = CommandDialog(self, "Edit Command Snippet", command_data)
+            if dialog.result:
+                # Update in database
+                self.db_manager.update_command(command_id, dialog.result)
+                self.load_commands()
+                
+    def delete_command(self):
+        """Delete selected command"""
+        selection = self.commands_tree.selection()
+        if not selection:
+            messagebox.showwarning("No Selection", "Please select a command to delete.")
+            return
+            
+        command_id = selection[0]
+        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this command?"):
+            self.db_manager.delete_command(command_id)
+            self.load_commands()
             
     def on_command_double_click(self, event):
         """Handle double-click on command"""
-        selection = self.command_tree.selection()
+        selection = self.commands_tree.selection()
         if selection:
-            item = selection[0]
-            cmd_id = self.command_tree.item(item, "tags")[0]
-            command = self.db_manager.get_command(cmd_id)
-            if command:
-                self.show_command_details(command)
-                
-    def show_command_details(self, command: Dict[str, Any]):
-        """Show command details in the right panel"""
-        for field_name, label in self.detail_labels.items():
-            value = command.get(field_name, '')
-            label.config(text=str(value))
-            
-    def add_command(self):
-        """Add a new command"""
-        dialog = CommandDialog(self, "Add Command")
-        if dialog.result:
-            try:
-                self.db_manager.add_command(**dialog.result)
-                self.refresh_commands()
-                messagebox.showinfo("Success", "Command added successfully")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to add command: {str(e)}")
-                
-    def edit_command(self):
-        """Edit selected command"""
-        selection = self.command_tree.selection()
-        if not selection:
-            messagebox.showwarning("Warning", "Please select a command to edit")
-            return
-            
-        item = selection[0]
-        cmd_id = self.command_tree.item(item, "tags")[0]
-        command = self.db_manager.get_command(cmd_id)
-        
-        if command:
-            dialog = CommandDialog(self, "Edit Command", command)
-            if dialog.result:
-                try:
-                    self.db_manager.update_command(cmd_id, **dialog.result)
-                    self.refresh_commands()
-                    messagebox.showinfo("Success", "Command updated successfully")
-                except Exception as e:
-                    messagebox.showerror("Error", f"Failed to update command: {str(e)}")
-                    
-    def delete_command(self):
-        """Delete selected command"""
-        selection = self.command_tree.selection()
-        if not selection:
-            messagebox.showwarning("Warning", "Please select a command to delete")
-            return
-            
-        if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this command?"):
-            item = selection[0]
-            cmd_id = self.command_tree.item(item, "tags")[0]
-            try:
-                self.db_manager.delete_command(cmd_id)
-                self.refresh_commands()
-                messagebox.showinfo("Success", "Command deleted successfully")
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to delete command: {str(e)}")
-                
-    def execute_command(self):
-        """Execute the selected command"""
-        selection = self.command_tree.selection()
-        if not selection:
-            messagebox.showwarning("Warning", "Please select a command to execute")
-            return
-            
-        item = selection[0]
-        cmd_id = self.command_tree.item(item, "tags")[0]
-        command = self.db_manager.get_command(cmd_id)
-        
-        if command:
-            # TODO: Implement command execution
-            messagebox.showinfo("Execute Command", f"Would execute: {command.get('command', '')}")
+            command_id = selection[0]
+            command_data = self.db_manager.get_command(command_id)
+            if command_data:
+                self.on_snippet_select(command_data)
 
 
 class CommandDialog:
-    def __init__(self, parent, title, command=None):
+    def __init__(self, parent, title, command_data=None):
         self.result = None
-        self.command = command or {}
         
-        # Create dialog window
+        # Create dialog
         self.dialog = tk.Toplevel(parent)
         self.dialog.title(title)
         self.dialog.geometry("500x400")
@@ -198,84 +119,105 @@ class CommandDialog:
         self.dialog.grab_set()
         
         # Center dialog
-        self.dialog.geometry("+%d+%d" % (
-            parent.winfo_rootx() + 50,
-            parent.winfo_rooty() + 50
-        ))
+        self.dialog.geometry("+%d+%d" % (parent.winfo_rootx() + 50, parent.winfo_rooty() + 50))
         
-        self.setup_ui()
-        self.load_command_data()
+        self.setup_ui(command_data)
         
         # Wait for dialog to close
         parent.wait_window(self.dialog)
         
-    def setup_ui(self):
-        """Setup the dialog interface"""
-        main_frame = ttk.Frame(self.dialog, padding=20)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+    def setup_ui(self, command_data):
+        """Setup the dialog UI"""
+        # Command name
+        ttk.Label(self.dialog, text="Snippet Name:").pack(anchor=tk.W, padx=10, pady=(10, 5))
+        self.name_entry = ttk.Entry(self.dialog, width=50)
+        self.name_entry.pack(fill=tk.X, padx=10, pady=(0, 10))
         
-        # Form fields
-        fields = [
-            ("Name", "name"),
-            ("Command", "command"),
-            ("Category", "category"),
-            ("Description", "description"),
-            ("Arguments", "arguments")
+        # Category
+        ttk.Label(self.dialog, text="Category:").pack(anchor=tk.W, padx=10, pady=(0, 5))
+        self.category_entry = ttk.Entry(self.dialog, width=50)
+        self.category_entry.insert(0, "General")
+        self.category_entry.pack(fill=tk.X, padx=10, pady=(0, 10))
+        
+        # Command
+        ttk.Label(self.dialog, text="Command:").pack(anchor=tk.W, padx=10, pady=(0, 5))
+        self.command_text = tk.Text(self.dialog, height=6, width=50)
+        self.command_text.pack(fill=tk.X, padx=10, pady=(0, 10))
+        
+        # Quick command buttons
+        quick_frame = ttk.LabelFrame(self.dialog, text="Quick Commands", padding=5)
+        quick_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        
+        quick_commands = [
+            ("ls -la", "List files"),
+            ("pwd", "Current directory"),
+            ("whoami", "Current user"),
+            ("df -h", "Disk usage"),
+            ("ps aux", "All processes"),
+            ("top", "System monitor"),
+            ("cat", "View file"),
+            ("grep", "Search text"),
+            ("find", "Find files"),
+            ("tar", "Archive files")
         ]
         
-        self.entries = {}
-        for i, (label_text, field_name) in enumerate(fields):
-            ttk.Label(main_frame, text=f"{label_text}:").grid(row=i, column=0, sticky=tk.W, pady=5)
+        for i, (command, description) in enumerate(quick_commands):
+            btn = ttk.Button(
+                quick_frame, 
+                text=f"{description}",
+                command=lambda cmd=command: self.insert_command(cmd)
+            )
+            btn.grid(row=i//5, column=i%5, sticky="ew", padx=2, pady=2)
             
-            if field_name in ['description', 'arguments']:
-                # Use Text widget for longer fields
-                text_widget = tk.Text(main_frame, height=3, width=40)
-                text_widget.grid(row=i, column=1, sticky="ew", pady=5, padx=(10, 0))
-                self.entries[field_name] = text_widget
-            else:
-                entry = ttk.Entry(main_frame, width=40)
-                entry.grid(row=i, column=1, sticky="ew", pady=5, padx=(10, 0))
-                self.entries[field_name] = entry
-                
         # Configure grid weights
-        main_frame.columnconfigure(1, weight=1)
+        for i in range(5):
+            quick_frame.columnconfigure(i, weight=1)
+            
+        # Description
+        ttk.Label(self.dialog, text="Description:").pack(anchor=tk.W, padx=10, pady=(10, 5))
+        self.desc_text = tk.Text(self.dialog, height=3, width=50)
+        self.desc_text.pack(fill=tk.X, padx=10, pady=(0, 10))
         
         # Buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=len(fields), column=0, columnspan=2, pady=(20, 0))
+        button_frame = ttk.Frame(self.dialog)
+        button_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
         
-        ttk.Button(button_frame, text="Save", command=self.save).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(button_frame, text="Cancel", command=self.cancel).pack(side=tk.LEFT)
+        ttk.Button(button_frame, text="Save", command=self.save).pack(side=tk.RIGHT, padx=(5, 0))
+        ttk.Button(button_frame, text="Cancel", command=self.cancel).pack(side=tk.RIGHT)
         
-    def load_command_data(self):
-        """Load existing command data into form"""
-        if self.command:
-            for field_name, widget in self.entries.items():
-                value = self.command.get(field_name, '')
-                if isinstance(widget, tk.Text):
-                    widget.insert("1.0", str(value))
-                else:
-                    widget.insert(0, str(value))
-                    
+        # Load existing data
+        if command_data:
+            self.name_entry.insert(0, command_data.get('name', ''))
+            self.category_entry.delete(0, tk.END)
+            self.category_entry.insert(0, command_data.get('category', 'General'))
+            self.command_text.insert('1.0', command_data.get('command', ''))
+            self.desc_text.insert('1.0', command_data.get('description', ''))
+            
+    def insert_command(self, command: str):
+        """Insert a quick command into the command text"""
+        self.command_text.insert(tk.INSERT, command)
+        
     def save(self):
         """Save the command data"""
-        data = {}
-        for field_name, widget in self.entries.items():
-            if isinstance(widget, tk.Text):
-                value = widget.get("1.0", tk.END).strip()
-            else:
-                value = widget.get().strip()
-            data[field_name] = value
-            
-        # Validate required fields
-        if not data.get('name'):
-            messagebox.showerror("Error", "Name is required")
-            return
-        if not data.get('command'):
-            messagebox.showerror("Error", "Command is required")
+        name = self.name_entry.get().strip()
+        category = self.category_entry.get().strip()
+        command = self.command_text.get('1.0', tk.END).strip()
+        description = self.desc_text.get('1.0', tk.END).strip()
+        
+        if not all([name, command]):
+            messagebox.showwarning("Validation", "Name and command are required.")
             return
             
-        self.result = data
+        if not category:
+            category = "General"
+            
+        self.result = {
+            'name': name,
+            'command': command,
+            'category': category,
+            'description': description
+        }
+        
         self.dialog.destroy()
         
     def cancel(self):
