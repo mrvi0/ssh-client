@@ -1,0 +1,33 @@
+# Web Framework
+Flask==2.3.3
+Flask-CORS==4.0.0
+Flask-SocketIO==5.3.6
+
+# Database
+SQLAlchemy==2.0.23
+Flask-SQLAlchemy==3.1.1
+
+# Security & Encryption
+cryptography==41.0.7
+bcrypt==4.1.2
+PyJWT==2.8.0
+
+# SSH Client
+paramiko==3.4.0
+
+# Environment & Config
+python-dotenv==1.0.0
+
+# Development
+python-socketio==5.10.0
+eventlet==0.33.3
+
+# Utilities
+click==8.1.7
+Werkzeug==2.3.7
+
+# Desktop App Dependencies
+sqlite3
+tkinter
+pillow==10.0.1
+requests==2.31.0 

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSH Client - Self-hosted</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo">🔐 SSH Client</div>
+            
+            <div class="nav-item active" data-page="dashboard">
+                <span>📊</span>
+                Dashboard
+            </div>
+            
+            <div class="nav-item" data-page="connections">
+                <span>🔗</span>
+                Connections
+            </div>
+            
+            <div class="nav-item" data-page="settings">
+                <span>⚙️</span>
+                Settings
+            </div>
+            
+            <hr>
+            
+            <h3>Recent Connections</h3>
+            <div id="recent-connections">
+                <!-- Recent connections will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="header">
+                <h1 id="page-title">Dashboard</h1>
+                <div class="header-actions">
+                    <button class="btn" id="copy-btn">📋 Copy</button>
+                    <button class="btn" id="save-btn">💾 Save</button>
+                    <button class="btn btn-primary" id="new-connection-btn">➕ New Connection</button>
+                </div>
+            </div>
+
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page active">
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h3>Quick Stats</h3>
+                        <div class="stats">
+                            <div class="stat">
+                                <span class="stat-number" id="total-connections">0</span>
+                                <span class="stat-label">Total Connections</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-number" id="active-connections">0</span>
+                                <span class="stat-label">Active Sessions</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>Recent Activity</h3>
+                        <div id="recent-activity">
+                            <p>No recent activity</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connections Page -->
+            <div id="connections-page" class="page">
+                <div class="connections-header">
+                    <h2>SSH Connections</h2>
+                    <button class="btn btn-primary" id="add-connection-btn">Add Connection</button>
+                </div>
+                
+                <div class="connections-grid" id="connections-grid">
+                    <!-- Connections will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Terminal Page -->
+            <div id="terminal-page" class="page">
+                <div class="terminal-container">
+                    <div class="terminal-header">
+                        <span id="terminal-title">Terminal Session</span>
+                        <div class="terminal-controls">
+                            <button class="btn btn-small" id="clear-terminal">Clear</button>
+                            <button class="btn btn-small" id="disconnect-btn">Disconnect</button>
+                        </div>
+                    </div>
+                    
+                    <div class="terminal" id="terminal">
+                        <div class="terminal-line">
+                            <span class="terminal-prompt">Welcome to SSH Client</span>
+                        </div>
+                        <div class="terminal-line">
+                            <span class="terminal-prompt">Select a connection to start</span>
+                        </div>
+                    </div>
+                    
+                    <div class="terminal-input-container">
+                        <input type="text" class="terminal-input" id="command-input" placeholder="Enter command...">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="settings-page" class="page">
+                <div class="settings-container">
+                    <h2>Settings</h2>
+                    
+                    <div class="setting-group">
+                        <h3>Authentication</h3>
+                        <div class="setting-item">
+                            <label>Master Password</label>
+                            <input type="password" id="master-password" placeholder="Set master password">
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <h3>Security</h3>
+                        <div class="setting-item">
+                            <label>Auto-lock timeout (minutes)</label>
+                            <input type="number" id="auto-lock-timeout" value="30" min="1" max="1440">
+                        </div>
+                    </div>
+                    
+                    <div class="setting-group">
+                        <h3>Appearance</h3>
+                        <div class="setting-item">
+                            <label>Theme</label>
+                            <select id="theme-select">
+                                <option value="dark">Dark</option>
+                                <option value="light">Light</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Modal -->
+    <div id="connection-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">New Connection</h2>
+                <button class="modal-close" id="modal-close">&times;</button>
+            </div>
+            
+            <form id="connection-form">
+                <div class="form-group">
+                    <label>Connection Name</label>
+                    <input type="text" id="conn-name" required placeholder="My Server">
+                </div>
+                
+                <div class="form-group">
+                    <label>Host</label>
+                    <input type="text" id="conn-host" required placeholder="192.168.1.100">
+                </div>
+                
+                <div class="form-group">
+                    <label>Port</label>
+                    <input type="number" id="conn-port" value="22" min="1" max="65535">
+                </div>
+                
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="conn-username" required placeholder="root">
+                </div>
+                
+                <div class="form-group">
+                    <label>Authentication Method</label>
+                    <select id="auth-method">
+                        <option value="password">Password</option>
+                        <option value="key">Private Key</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="password-group">
+                    <label>Password</label>
+                    <input type="password" id="conn-password" placeholder="Enter password">
+                </div>
+                
+                <div class="form-group" id="key-group" style="display: none;">
+                    <label>Private Key</label>
+                    <textarea id="conn-private-key" placeholder="Paste your private key here"></textarea>
+                </div>
+                
+                <div class="form-group" id="passphrase-group" style="display: none;">
+                    <label>Passphrase</label>
+                    <input type="password" id="conn-passphrase" placeholder="Enter passphrase">
+                </div>
+                
+                <div class="form-group">
+                    <label>Group</label>
+                    <input type="text" id="conn-group" placeholder="Production">
+                </div>
+                
+                <div class="form-group">
+                    <label>Tags</label>
+                    <input type="text" id="conn-tags" placeholder="web,production,ubuntu">
+                </div>
+                
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="conn-notes" placeholder="Additional notes"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn" id="cancel-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Connection</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Login</h2>
+            </div>
+            
+            <form id="login-form">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="login-username" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" required>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn" id="register-btn">Register</button>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html> 
